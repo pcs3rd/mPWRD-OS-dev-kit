@@ -62,9 +62,6 @@ Main() {
 	InstallAptPkg "pipx"
 	InstallAptPkg "cockpit cockpit-networkmanager"
 
-	InstallAptPkg "i2c-tools"
-	InstallAptPkg "net-tools"
-
 	# Spud Added packages for dev-kit in runtime
 	InstallAptPkg "python3-pip"
 	InstallAptPkg "python3-dev"
@@ -77,8 +74,9 @@ Main() {
 	InstallAptPkg "cargo"
 	InstallAptPkg "libffi-dev"
 	InstallAptPkg "libssl-dev"
-	InstallAptPkg "git"
 
+	# Misc
+	InstallAptPkg "vim git i2c-tools net-tools fonts-noto-color-emoji"
 	case $pipx_g in
 		true)
 			# Spud: removed and put into global pip install
@@ -98,7 +96,6 @@ Main() {
 	InstallPipPkg "meshtastic"
 
 	#meshing-around
-	InstallAptPkg "fonts-noto-color-emoji"
 	GitClone "https://github.com/SpudGunMan/meshing-around" "/opt/meshing-around"
 	if [ -d "/opt/meshing-around/" ]; then
 		./opt/meshing-around/bootstrap.sh
@@ -106,6 +103,7 @@ Main() {
 
 	# Always run
 	ApplyFSOverlay
+	BoardSpecific "$@"
 	CleanupApt
 	CompileDTBO
 } # Main
@@ -225,7 +223,31 @@ EnableKernelDTOverlay() {
 	else
 		echo "Warning: /boot/armbianEnv.txt not found, cannot enable device tree overlays"
 	fi
-}
+} # EnableKernelDTOverlay
+
+__ConfigNymeaNM() {
+	# https://github.com/nymea/nymea-networkmanager/#configuration
+	# Set Mode to 'once' in nymea-networkmanager config
+	sed -i 's/^Mode=.*/Mode=once/' /etc/nymea/nymea-networkmanager.conf
+	# Set AdvertiseName to 'mpwrd-nm' in nymea-networkmanager config
+	sed -i 's/^AdvertiseName=.*/AdvertiseName=mpwrd-nm/' /etc/nymea/nymea-networkmanager.conf
+	# Set PlatformName to 'mpwrd-os' in nymea-networkmanager config
+	sed -i 's/^PlatformName=.*/PlatformName=mpwrd-os/' /etc/nymea/nymea-networkmanager.conf
+} # __ConfigNymeaNM
+
+NymeaNM() {
+	# Nymea-NetworkManager BLE WiFi provisioning
+	# Only tested on trixie
+	case $RELEASE in
+		trixie)
+			InstallAptPkg "nymea-networkmanager"
+			__ConfigNymeaNM
+			;;
+		*)
+			echo "Nymea-NetworkManager not supported on release: $RELEASE"
+			;;
+	esac
+} # NymeaNM
 
 MTSetMacSrc() {
 	iface_name="$1"
@@ -236,11 +258,17 @@ MTSetMacSrc() {
 
 BoardSpecific() {
 	case $BOARD in
+		ebyte-ecb41-pge)
+			# Enable ebyte-ecb41-pge-spi0-1cs-spidev overlay
+			EnableUserDTOverlay "ebyte-ecb41-pge-spi0-1cs-spidev"
+			# Set meshtasticd MacAddressSource to 'end0' for ebyte-ecb41-pge
+			MTSetMacSrc "end0"
+			;;
 		forlinx-ok3506-s12)
 			# Enable forlinx-ok3506-s12-spi0-1cs-spidev overlay
 			EnableKernelDTOverlay "forlinx-ok3506-s12-spi0-1cs-spidev"
-			# Set meshtasticd MacAddressSource to 'end1' for forlinx-ok3506-s12
-			MTSetMacSrc "end1"
+			# Set meshtasticd MacAddressSource to 'end0' for forlinx-ok3506-s12
+			MTSetMacSrc "end0"
 			;;
 		luckfox-lyra-plus)
 			# Enable luckfox-lyra-plus-spi0-1cs_rmio13-spidev overlay
@@ -278,9 +306,10 @@ BoardSpecific() {
 			;;
 		# raspberry-pi-64bit
 		rpi4b)
-			# Setup devicetree overlay for SPI stuff
-			# TODO Set meshtasticd MacAddressSource to 'eth0' for rpi4b
-			# MTSetMacSrc "eth0"
+			# Enable Nymea-NetworkManager (BLE WiFi provisioning)
+			NymeaNM
+			# Set meshtasticd MacAddressSource to 'end0' for Raspberry Pi
+			MTSetMacSrc "end0"
 			;;
 		*)
 			echo "No board-specific customizations for board: $BOARD"
@@ -291,4 +320,3 @@ BoardSpecific() {
 } # BoardSpecific
 
 Main "$@"
-BoardSpecific "$@"

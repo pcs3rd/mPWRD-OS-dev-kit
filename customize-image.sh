@@ -24,23 +24,15 @@ export APT_LISTCHANGES_FRONTEND=none
 # Release-specific variables
 case $RELEASE in
 	trixie)
-		DISTRIBUTION="Debian"
-		obs_slug="Debian_13"
 		pipx_g=true
 		;;
 	bookworm)
-		DISTRIBUTION="Debian"
-		obs_slug="Debian_12"
 		pipx_g=false
 		;;
 	resolute)
-		DISTRIBUTION="Ubuntu"
-		obs_slug="xUbuntu_26.04"
 		pipx_g=true
 		;;
 	noble)
-		DISTRIBUTION="Ubuntu"
-		obs_slug="xUbuntu_24.04"
 		pipx_g=false
 		;;
 	*)
@@ -52,12 +44,16 @@ esac
 
 Main() {
 	apt-get update
+	# meshtasticd can't currently be installed via the `meshtasticd` Extension
+	# due to a race condition with the gpio group when installing before family-tweaks.
+	InstallAptPkg "meshtasticd"
+	# Same story with i2c-tools. Race condition with i2c group in family-tweaks.
+	InstallAptPkg "i2c-tools"
 	InstallAptPkg "gpg"
 	AddMeshtasticRepo
 	AddMPWRD_Repo_OBS
 	apt-get update
 	InstallAptPkg "vim"
-	InstallAptPkg "meshtasticd"
 	InstallAptPkg "mpwrd-menu"
 	InstallAptPkg "pipx"
 	InstallAptPkg "cockpit cockpit-networkmanager"
@@ -76,7 +72,7 @@ Main() {
 	InstallAptPkg "libssl-dev"
 
 	# Misc
-	InstallAptPkg "vim git i2c-tools net-tools fonts-noto-color-emoji"
+	InstallAptPkg "vim git net-tools fonts-noto-color-emoji"
 	case $pipx_g in
 		true)
 			# Spud: removed and put into global pip install
@@ -104,7 +100,7 @@ Main() {
 	# Always run
 	ApplyFSOverlay
 	BoardSpecific "$@"
-	CleanupApt
+	apt-get clean && rm -rf /var/lib/apt/lists/*
 	CompileDTBO
 } # Main
 
@@ -113,31 +109,6 @@ ApplyFSOverlay() {
 	# replacing existing files
 	cp -r /tmp/overlay/fs/* /
 } # ApplyFSOverlay
-
-AddMeshtasticRepo() {
-	case $DISTRIBUTION in
-		Debian)
-			__AddMeshtasticRepo_Debian_OBS
-			;;
-		Ubuntu)
-			__AddMeshtasticRepo_Ubuntu_PPA
-			;;
-	esac
-} # AddMeshtasticRepo
-
-__AddMeshtasticRepo_Debian_OBS() {
-	echo "deb http://download.opensuse.org/repositories/network:/Meshtastic:/beta/$obs_slug/ /" | tee /etc/apt/sources.list.d/network:Meshtastic:beta.list
-	curl -fsSL https://download.opensuse.org/repositories/network:Meshtastic:beta/$obs_slug/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/network_Meshtastic_beta.gpg > /dev/null
-} # __AddMeshtasticRepo_Debian_OBS
-
-__AddMeshtasticRepo_Ubuntu_PPA() {
-	add-apt-repository --yes ppa:meshtastic/beta
-} # __AddMeshtasticRepo_Ubuntu_PPA
-
-AddMPWRD_Repo_OBS() {
-	echo "deb http://download.opensuse.org/repositories/home:/mPWRD:/OS/$obs_slug/ /" | tee /etc/apt/sources.list.d/home:mPWRD:OS.list
-	curl -fsSL https://download.opensuse.org/repositories/home:mPWRD:OS/$obs_slug/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/home_mPWRD_OS.gpg > /dev/null
-} # AddMPWRD_Repo_OBS
 
 InstallAptPkg() {
 	PKGSPEC="$1"
@@ -225,29 +196,6 @@ EnableKernelDTOverlay() {
 	fi
 } # EnableKernelDTOverlay
 
-__ConfigNymeaNM() {
-	# https://github.com/nymea/nymea-networkmanager/#configuration
-	# Set Mode to 'once' in nymea-networkmanager config
-	sed -i 's/^Mode=.*/Mode=once/' /etc/nymea/nymea-networkmanager.conf
-	# Set AdvertiseName to 'mpwrd-nm' in nymea-networkmanager config
-	sed -i 's/^AdvertiseName=.*/AdvertiseName=mpwrd-nm/' /etc/nymea/nymea-networkmanager.conf
-	# Set PlatformName to 'mpwrd-os' in nymea-networkmanager config
-	sed -i 's/^PlatformName=.*/PlatformName=mpwrd-os/' /etc/nymea/nymea-networkmanager.conf
-} # __ConfigNymeaNM
-
-NymeaNM() {
-	# Nymea-NetworkManager BLE WiFi provisioning
-	# Only tested on trixie
-	case $RELEASE in
-		trixie)
-			InstallAptPkg "nymea-networkmanager"
-			__ConfigNymeaNM
-			;;
-		*)
-			echo "Nymea-NetworkManager not supported on release: $RELEASE"
-			;;
-	esac
-} # NymeaNM
 
 MTSetMacSrc() {
 	iface_name="$1"
@@ -257,6 +205,8 @@ MTSetMacSrc() {
 } # MTSetMacSrc
 
 BoardSpecific() {
+	# Note: Board specific customizations may also be added via Extensions
+	# See extensions/ directory
 	case $BOARD in
 		ebyte-ecb41-pge)
 			# Enable ebyte-ecb41-pge-spi0-1cs-spidev overlay
@@ -276,7 +226,7 @@ BoardSpecific() {
 			# Set meshtasticd MacAddressSource to 'end1' for lyra-plus
 			MTSetMacSrc "end1"
 			# Download waveshare pico config for lyra-plus
-			curl -fsSL https://raw.githubusercontent.com/meshtastic/firmware/refs/tags/v2.7.20.6658ec2/bin/config.d/lora-lyra-ws-raspberry-pi-pico-hat.yaml \
+			curl -fsSL https://raw.githubusercontent.com/meshtastic/firmware/refs/tags/v2.7.22.96dd647/bin/config.d/lora-lyra-ws-raspberry-pi-pico-hat.yaml \
 				-o /etc/meshtasticd/config.d/lora-lyra-ws-raspberry-pi-pico-hat.yaml
 			;;
 		luckfox-lyra-ultra-w)
@@ -287,7 +237,7 @@ BoardSpecific() {
 			# Set meshtasticd MacAddressSource to 'end1' for lyra-ultra-w
 			MTSetMacSrc "end1"
 			# Download 'Luckfox Ultra' 2W hat config for lyra-ultra
-			curl -fsSL https://raw.githubusercontent.com/meshtastic/firmware/refs/tags/v2.7.20.6658ec2/bin/config.d/lora-lyra-ultra_2w.yaml \
+			curl -fsSL https://raw.githubusercontent.com/meshtastic/firmware/refs/tags/v2.7.22.96dd647/bin/config.d/lora-lyra-ultra_2w.yaml \
 				-o /etc/meshtasticd/config.d/lora-lyra-ultra_2w.yaml
 			;;
 		luckfox-lyra-zero-w)
@@ -297,17 +247,19 @@ BoardSpecific() {
 		luckfox-pico-max)
 			# Set meshtasticd MacAddressSource to 'eth0' for pico-max
 			MTSetMacSrc "eth0"
+			# Download waveshare pico config for pico-max (from develop branch)
+			curl -fsSL https://github.com/meshtastic/firmware/raw/466cc4cecddd11cd1bb0d0b166bd658d116832b3/bin/config.d/lora-luckfox-pico-max-ws-raspberry-pi-pico-hat.yaml \
+				-o /etc/meshtasticd/config.d/lora-luckfox-pico-max-ws-raspberry-pi-pico-hat.yaml
 			;;
 		luckfox-pico-mini)
 			# Set meshtasticd MacAddressSource to 'eth0' for pico-mini
 			MTSetMacSrc "eth0"
-			# Copy femtofox config for pico-mini
-			cp /etc/meshtasticd/available.d/femtofox/femtofox_SX1262_TCXO.yaml /etc/meshtasticd/config.d/
+			# Download femtofox config for pico-mini (directory changed upstream)
+			curl -fsSL https://raw.githubusercontent.com/meshtastic/firmware/refs/tags/v2.7.22.96dd647/bin/config.d/lora-femtofox_SX1262_TCXO.yaml \
+				-o /etc/meshtasticd/config.d/lora-femtofox_SX1262_TCXO.yaml
 			;;
 		# raspberry-pi-64bit
 		rpi4b)
-			# Enable Nymea-NetworkManager (BLE WiFi provisioning)
-			NymeaNM
 			# Set meshtasticd MacAddressSource to 'end0' for Raspberry Pi
 			MTSetMacSrc "end0"
 			;;

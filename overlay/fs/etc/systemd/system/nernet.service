@@ -6,13 +6,11 @@ Wants=network.target
 [Service]
 Type=simple
 # CE pin: adjust GPIO number to match your wiring
-# GPIO1_C7 = 1*32 + 2*8 + 7 = 55 — change this to your actual CE pin
-# GPIO1_C6 = 1 * 32 + 2 * 8 + 6 = 54 - not 3.3v
-# GPIO1_c3. =1 * 32 + 2 * 8 + 3 = 51 - 3.3v
+# CE wired to physical pin 10 (GPIO1_C4) = 1*32 + 2*8 + 4 = 52
 ExecStart=/usr/local/bin/nerfnet \
     --secondary \
     --spi_device /dev/spidev0.0 \
-    --ce_pin 51 \
+    --ce_pin 52 \
     --rf_channel 76
 ExecStartPost=/bin/sh -c 'sleep 1 && ip addr add 10.0.0.2/24 dev nerf0'
 Restart=on-failure

@@ -1,0 +1,20 @@
+[Unit]
+Description=nRF24L01 SSH tunnel (nerfnet)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+# CE pin: adjust GPIO number to match your wiring
+# CE wired to physical pin 10 (GPIO1_C4) = 1*32 + 2*8 + 4 = 52
+ExecStart=/usr/local/bin/nerfnet \
+    --secondary \
+    --spi_device /dev/spidev0.0 \
+    --ce_pin 52 \
+    --rf_channel 76
+ExecStartPost=/bin/sh -c 'sleep 1 && ip addr add 10.0.0.2/24 dev nerf0'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

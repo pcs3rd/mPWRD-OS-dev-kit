@@ -18,7 +18,7 @@
 - 🛜 WiFi provisioning via temporary `armbiansetup` hotspot.
   - Powered by 🌐 [armbian-web-config](https://github.com/Grippy98/armbian-web-config).
   - Supported on Luckfox Lyra Zero W and Luckfox Lyra Ultra W with more to come.
-
+ - nerfnet for nrf24 on pico mini a (pin 9)
 ## Board Support
 
 See: [Board Support](https://github.com/mPWRD-OS/mPWRD-OS/wiki/Board-Support) wiki page.

@@ -70,6 +70,7 @@ Main() {
 	InstallAptPkg "cargo"
 	InstallAptPkg "libffi-dev"
 	InstallAptPkg "libssl-dev"
+	InstallNerfnet
 
 	# Misc
 	InstallAptPkg "vim git net-tools fonts-noto-color-emoji"
@@ -103,6 +104,34 @@ Main() {
 	apt-get clean && rm -rf /var/lib/apt/lists/*
 	CompileDTBO
 } # Main
+
+InstallNerfnet() {
+    echo "Building RF24 + nerfnet for nRF24L01 tunnel..."
+
+    # Build deps
+    InstallAptPkg "cmake libtclap-dev libgpiod-dev"
+
+    # Build RF24 with SPIDEV driver (generic Linux, no Pi-specific code)
+    GitClone "https://github.com/nRF24/RF24" "/opt/RF24"
+    cd /opt/RF24
+    mkdir -p build && cd build
+    cmake .. -D RF24_DRIVER=SPIDEV
+    make -j4
+    make install
+    ldconfig
+    cd /
+
+    # Build nerfnet
+    GitClone "https://github.com/aarossig/nrfnet" "/opt/nrfnet"
+    cd /opt/nrfnet
+    mkdir -p build && cd build
+    cmake ..
+    make -j4
+    # Install binary to a stable path
+    cp nerfnet/net/nerfnet /usr/local/bin/nerfnet
+    cd /
+	systemctl enable nerfnet
+} # InstallNerfnet
 
 ApplyFSOverlay() {
 	# Copy overlay files to their destinations
@@ -251,12 +280,15 @@ BoardSpecific() {
 			curl -fsSL https://github.com/meshtastic/firmware/raw/466cc4cecddd11cd1bb0d0b166bd658d116832b3/bin/config.d/lora-luckfox-pico-max-ws-raspberry-pi-pico-hat.yaml \
 				-o /etc/meshtasticd/config.d/lora-luckfox-pico-max-ws-raspberry-pi-pico-hat.yaml
 			;;
+
 		luckfox-pico-mini)
 			# Set meshtasticd MacAddressSource to 'eth0' for pico-mini
 			MTSetMacSrc "eth0"
 			# Download femtofox config for pico-mini (directory changed upstream)
 			curl -fsSL https://raw.githubusercontent.com/meshtastic/firmware/refs/tags/v2.7.22.96dd647/bin/config.d/lora-femtofox_SX1262_TCXO.yaml \
 				-o /etc/meshtasticd/config.d/lora-femtofox_SX1262_TCXO.yaml
+			# Enable SPI0 for nRF24 nerfnet tunnel
+			EnableKernelDTOverlay "spi0-1cs-spidev"
 			;;
 		# raspberry-pi-64bit
 		rpi4b)
